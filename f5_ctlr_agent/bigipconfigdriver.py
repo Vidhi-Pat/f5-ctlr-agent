@@ -770,6 +770,7 @@ class GTMManager(object):
                     wideipForPoolDeleted = rev_map["pools"][pool]
                     for wideip in wideipForPoolDeleted:
                         self.delete_gtm_pool(gtm, partition, wideip, pool)
+
             if len(opr_config["wideIPs"]) > 0:
                 for wideip in opr_config["wideIPs"]:
                     self.delete_gtm_wideip(gtm, partition, wideip)
@@ -781,6 +782,7 @@ class GTMManager(object):
         """ Handle create operation """
         try:
             oldConfig = copy.deepcopy(self._gtm_config)
+            log.error("VP: old GTM config deep copy one {}".format(oldConfig))
             if len(opr_config["pools"]) > 0 or len(opr_config["monitors"]) > 0 or len(opr_config["wideIPs"]) > 0:
                 if partition in gtmConfig and "wideIPs" in gtmConfig[partition]:
                     if gtmConfig[partition]['wideIPs'] is not None:
@@ -792,6 +794,7 @@ class GTMManager(object):
                                 newPools[pool['name']] = {
                                     'name': pool['name'], 'partition': partition, 'ratio': 1
                                 }
+                                log.error("VP:new Pools {}".format(newPools))
                                 all_monitors = ""
                                 if "monitors" in pool.keys():
                                     # Create Health Monitor
@@ -808,6 +811,7 @@ class GTMManager(object):
                                             all_monitors += " and "
                                 # Delete the old pool members
                                 if partition in oldConfig and "wideIPs" in oldConfig[partition]:
+                                    log.error("VP: GTM config before processing {}".format(self._gtm_config))
                                     if oldConfig[partition]['wideIPs'] is not None:
                                         for index, oldConfig in enumerate(oldConfig[partition]['wideIPs']):
                                             for pool_index, oldPool in enumerate(config['pools']):
@@ -816,12 +820,16 @@ class GTMManager(object):
                                                         oldPoolMember = set(oldPool['members'])
                                                         newPoolMember = set(pool['members'])
                                                         deleteMember = oldPoolMember - newPoolMember
+                                                        log.error("VP:old pool {}".format(oldPoolMember))
+                                                        log.error("VP: new pool {}".format(newPoolMember))
+                                                        log.error("VP: delete pool {}".format(deleteMember))
                                                         for member in deleteMember:
                                                             self.remove_member_to_gtm_pool(
                                                                 gtm,
                                                                 partition,
                                                                 oldPool['name'],
                                                                 member)
+                                                        log.error("VP: GTM config after processing {}".format(self._gtm_config))
                                                         self._gtm_config[partition]['wideIPs'][index]["pools"][
                                                             pool_index]['members'] = None
                             try:
@@ -1138,6 +1146,8 @@ class GTMManager(object):
             oldConfig = copy.deepcopy(self._gtm_config)
             # Fix this multiple loop 
             if oldConfig[partition]['wideIPs'] is not None:
+                index = 0
+                pool_index = 0
                 for index, wideip in enumerate(oldConfig[partition]['wideIPs']):
                     if wideipName==wideip['name']:
                         for pool_index, pool in enumerate(wideip['pools']):
@@ -1148,7 +1158,11 @@ class GTMManager(object):
                                         partition,
                                         poolName,
                                         member)
+                                log.error("VP: pools jo delete hone chahiye {}".format(self._gtm_config[partition]['wideIPs'][index]["pools"][pool_index]['members']))
                                 self._gtm_config[partition]['wideIPs'][index]["pools"][pool_index]['members'] = None
+                                # self._gtm_config[partition]['wideIPs'][index]["pools"].pop(pool_index)
+                                break
+                        break
                 self.remove_gtm_pool_to_wideip(gtm,
                     wideipName,partition,poolName)
                 obj = gtm.pools.a_s.a.load(
@@ -1156,7 +1170,11 @@ class GTMManager(object):
                     partition=partition)
                 obj.delete()
                 log.info("Deleted the pool: {}".format(poolName))
+                log.error("VP: GTM config before popping {}".format(self._gtm_config))
                 self._gtm_config[partition]['wideIPs'][index]["pools"].pop(pool_index)
+                log.error("VP: pool index {}, index {} and pool hat raha hai {}".format(pool_index, index , self._gtm_config[partition]['wideIPs'][index]["pools"]))
+                log.error("VP: old config {}".format(oldConfig))
+                log.error("VP: GTM config after popping the deleted pool index {}".format(self._gtm_config))
         except F5CcclError as e:
             log.error("GTM: Error while deleting pool: %s", e)
             raise e
@@ -1272,7 +1290,6 @@ class GTMManager(object):
         def _get_crud_wide_ips(d1, d2):
             wip_set1 = set([v["name"] for v in _get_value(d1,"wideIPs")])
             wip_set2 = set([v["name"] for v in _get_value(d2,"wideIPs")])
-
             del_wips = list(wip_set1 - wip_set2)
             new_wips = list(wip_set2 - wip_set1)
             cur_wips = wip_set1.intersection(wip_set2)
@@ -1351,10 +1368,11 @@ class GTMManager(object):
             return new_mons, del_mons, update_mons
 
         new_wips, del_wips, update_wips = _get_crud_wide_ips(d1, d2)
-
+        log.error("VP: new wips {} , del wip {}, updated wip {}".format(new_wips, del_wips, update_wips))
         new_pools, del_pools, update_pools = _get_crud_pools(d1, d2)
-
+        log.error("VP: new pools {} , del pools {}, updated pools {}".format(new_pools, del_pools, update_pools))
         new_mons, del_mons, update_mons = _get_crud_monitors(d1, d2)
+        log.error("VP: new monitos {} , del monitors {}, updated monitors {}".format(new_mons, del_mons, update_mons))
 
         return {
             "create": {
